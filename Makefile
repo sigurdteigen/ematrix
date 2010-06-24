@@ -4,7 +4,7 @@ compile:
 clean:
 	./rebar clean
 
-shell:
+shell: compile
 	cd ebin && erl
 
 devclean: clean
