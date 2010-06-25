@@ -7,13 +7,17 @@
 
 %% API
 -export([add/2,
+	 all/2,
 	 column/2,
 	 diagonal/1,
 	 dot/2,
+	 fold/3,
 	 from_list/1,
 	 generate/3,
 	 get/3,
 	 identity/1,
+	 is_equal/2,
+	 is_square/1,
 	 map/2,
 	 mult/2,
 	 new/2,
@@ -45,6 +49,14 @@ add(Matrix1, Matrix2) ->
 		    Term1 + Term2
 	    end, Matrix1, Matrix2).
 
+%% @doc True if the value of all cells pass the predicate
+-spec all(fun((pos_integer(), pos_integer(), number()) -> boolean()),
+	     #matrix{}) -> boolean().
+all(Pred, Matrix) ->
+    fold(fun(Row, Col, Value, Acc) ->
+		 Acc and Pred(Row, Col, Value)
+	 end, true, Matrix).
+
 %% @doc The vector representing the column at the given index.
 -spec column(pos_integer(), #matrix{}) -> [number()].
 column(RowIndex, #matrix{numrows = NumRows, numcols = NumCols, data = Data}) ->
@@ -71,6 +83,31 @@ dot(#matrix{numrows = 1} = Vector1, #matrix{numrows = 1} = Vector2) ->
 		    Value1, Value2
 	    end, Vector1, Vector2).
 
+%% @doc A value constructed by reducing the values of the matrix
+%%      using the supplied function.
+-spec fold(fun((non_neg_integer(), non_neg_integer(),
+		number(), term()) -> term()),
+	      term(), #matrix{}) -> term().
+fold(Fun, InitialAcc, #matrix{numcols = NumCols, data = Data}) ->
+    array:foldl(fun(Index, Value, Acc) ->
+			Fun(Index div NumCols,
+			    Index div NumCols,
+			    Value, Acc)
+		end, InitialAcc, Data).
+
+%% @doc A matrix generated from a list of lists of numbers.
+-spec from_list([[number()]]) -> #matrix{}.
+from_list(ListOfLists) when length(ListOfLists) > 0 ->
+    NumRows = length(ListOfLists),
+    NumColsInFirstRow = length(hd(ListOfLists)),
+    {true, _} = {lists:all(fun(Row) ->
+				   length(Row) == NumColsInFirstRow
+			   end, ListOfLists),
+		 "Matrix must not be jagged"},
+    #matrix{numrows = NumRows,
+	    numcols = NumColsInFirstRow,
+	    data = array:from_list(lists:flatten(ListOfLists))}.
+
 %% @doc Generates a matrix given a function taking the current position
 -spec generate(pos_integer(), pos_integer(),
 	       fun((pos_integer(), pos_integer()) -> number())) -> #matrix{}.
@@ -95,6 +132,18 @@ identity(Order) ->
 				   end
 			   end).
 
+%% @doc True if for Matrix1(i,j) == Matrix2(i,j) for all (i,j)
+is_equal(Matrix1, Matrix2) ->
+    true = matrix:size(Matrix1) == matrix:size(Matrix2).
+
+%% @doc True if the matrix is square, false otherwise.
+-spec is_square(#matrix{}) -> boolean().
+is_square(#matrix{numrows = NumRows, numcols = NumCols})
+  when NumRows == NumCols ->
+    true;
+is_square(_) ->
+    false.
+
 %% @doc An matrix with all cells initialized to 0.
 -spec new(pos_integer(), pos_integer()) -> #matrix{}.
 new(NumRows, NumCols) ->
@@ -103,19 +152,6 @@ new(NumRows, NumCols) ->
 	    data = array:new([{size, NumRows * NumCols},
 			      {default, 0},
 			      {fixed, true}])}.
-
-%% @doc A matrix generated from a list of lists of numbers.
--spec from_list([[number()]]) -> #matrix{}.
-from_list(ListOfLists) when length(ListOfLists) > 0 ->
-    NumRows = length(ListOfLists),
-    NumColsInFirstRow = length(hd(ListOfLists)),
-    {true, _} = {lists:all(fun(Row) ->
-				   length(Row) == NumColsInFirstRow
-			   end, ListOfLists),
-		 "Matrix must not be jagged"},
-    #matrix{numrows = NumRows,
-	    numcols = NumColsInFirstRow,
-	    data = array:from_list(lists:flatten(ListOfLists))}.
 
 %% @doc The number of rows and columns of the matrix
 -spec size(#matrix{}) -> {pos_integer(),pos_integer()}.
@@ -133,7 +169,6 @@ map(Fun, #matrix{numcols = NumCols, numrows = NumRows, data = Data}) ->
 					 Index rem NumCols,
 					 Value)
 			     end, Data)}.
-
 
 %% @doc Ordinary matrix multiplication (scalar).
 -spec mult(number(), #matrix{}) -> #matrix{};
